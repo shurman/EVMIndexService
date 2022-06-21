@@ -7,7 +7,7 @@ RUN wget -P /tmp https://go.dev/dl/go1.18.3.linux-amd64.tar.gz &&  tar -C /usr/l
 ENV GOPATH /go
 ENV PATH $GOPATH/bin:/usr/local/go/bin:$PATH
 RUN mkdir -p "$GOPATH/src" "$GOPATH/bin" && chmod -R 777 "$GOPATH"
-RUN cd $GOPATH/src && go mod init ethmod && go get -u github.com/ethereum/go-ethereum gorm.io/gorm gorm.io/driver/mysql
+RUN cd $GOPATH/src && go mod init ethmod && go get -u github.com/ethereum/go-ethereum gorm.io/gorm gorm.io/driver/mysql github.com/gin-gonic/gin
 
 COPY mysqlsetup.sh /tmp
 RUN sh /tmp/mysqlsetup.sh

@@ -3,17 +3,18 @@ package main
 import (
 	"fmt"
 	"context"
-	"time"
+	//"time"
 	"math/big"
 	//"reflect"
+	"encoding/hex"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	//"github.com/ethereum/go-ethereum/params"
-	"gorm.io/driver/mysql"
-	"gorm.io/gorm"
+	//"gorm.io/driver/mysql"
+	//"gorm.io/gorm"
 )
 
-const (
+/*const (
 	UserName     string = "root"
 	Password     string = "123qweasd"
 	Addr         string = "127.0.0.1"
@@ -64,7 +65,7 @@ func connectdb() *gorm.DB {
 	fmt.Println("Connection to DB Succeeded")
 
 	return conn
-}
+}*/
 
 var ctx = context.TODO()
 var client *ethclient.Client
@@ -85,7 +86,7 @@ func main() {
 	}
 
 	//fmt.Println("Create Blocks")
-	db.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(&Blocks{}, &TxInfo{})
+	db.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(&Block{}, &TxInfo{})
 
 	
 	url := fmt.Sprintf("%s://%s:%d", "https", "data-seed-prebsc-2-s3.binance.org", 8545)
@@ -100,7 +101,7 @@ func main() {
 		panic(err)
 	}
 
-	block_num := big.NewInt(20364600)
+	block_num := big.NewInt(20396000)
 	for {
 		last_block_num := getlastblocknum()
 
@@ -108,15 +109,15 @@ func main() {
 		fmt.Printf("Start from %s... Current latest: %s\n", block_num.String(), last_block_num.String());
 
 		for ; block_num.Cmp(last_block_num) <= 0; block_num.Add(block_num, big.NewInt(1)) {
-			fmt.Printf("\nParsing No.%s Block\n", block_num.String())
+			fmt.Printf("Parsing No.%s Block  ", block_num.String())
 
 			block, err := client.BlockByNumber(ctx, block_num)
         		if err != nil {
                 		panic(err)
 	        	}
-			fmt.Printf("%s  tx count:%d", block.Hash().Hex(), len(block.Transactions()))
+			fmt.Printf("%s  tx count:%d\n", block.Hash().Hex(), len(block.Transactions()))
 
-			newblock := Blocks{Num:block.NumberU64(), Hash:block.Hash().Hex(), Timestamp:block.Time(), ParentHash:block.ParentHash().Hex()}
+			newblock := Block{Num:block.NumberU64(), Hash:block.Hash().Hex(), Timestamp:block.Time(), ParentHash:block.ParentHash().Hex()}
 			result := db.Create(&newblock)
         		if result.Error != nil {
                 		panic("Create failt")
@@ -145,7 +146,7 @@ func main() {
 					}
 					//fmt.Println(txto)
 
-					txobj := &TxInfo{Txhash:tx.Hash().Hex(), Txfrom:msg.From().Hex(), Txto:txto, Value:tx.Value().String(), Nonce:tx.Nonce(), Data:tx.Data(), Block:block.NumberU64()}
+					txobj := &TxInfo{Txhash:tx.Hash().Hex(), Txfrom:msg.From().Hex(), Txto:txto, Value:tx.Value().String(), Nonce:tx.Nonce(), Data:"0x"+hex.EncodeToString(tx.Data()), Block:block.NumberU64()}
 
 					txs = append(txs, txobj)
 				}
@@ -156,7 +157,7 @@ func main() {
 		}
 	}
 
-	var fblock Blocks
+	var fblock Block
 	db.Debug().First(&fblock)
 }
 
