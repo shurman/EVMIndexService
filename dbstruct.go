@@ -7,14 +7,22 @@ import (
 	"gorm.io/gorm"
 )
 
+type Log struct {
+	Id	uint	`gorm:"type:int(10) UNSIGNED NOT NULL primary key AUTO_INCREMENT" json:"-"`
+	Tx	string	`gorm:"type:varchar(70) NOT NULL;" json:"-"`
+	Idx	uint	`gorm:"type:int(10) UNSIGNED NOT NULL;" json:"index"`
+	Data	string	`gorm:"type:mediumtext" json:"data"`
+}
+
 type TxInfo struct {
 	Txhash	string	`gorm:"type:varchar(70) NOT NULL primary key;" json:"tx_hash"`
-	Block	uint64 `gorm:"type:bigint(20) UNSIGNED NOT NULL;" json:"block_num"`
+	Block	uint64 `gorm:"type:bigint(20) UNSIGNED NOT NULL;" json:"-"`
 	Txfrom	string	`gorm:"type:varchar(65) NOT NULL;" json:"from"`
 	Txto	string	`gorm:"type:varchar(65) NOT NULL;" json:"to"`
 	Value	string	`gorm:"type:varchar(30) NOT NULL;" json:"value"`
 	Nonce	uint64	`gorm:"type:bigint(20) UNSIGNED NOT NULL;" json:"nonce"`
 	Data	string	`gorm:"type:mediumtext" json:"data"`
+	Logs	[]*Log	`gorm:"foreignKey:Tx;references:Txhash;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"logs"`
 }
 
 type Block struct {
@@ -22,12 +30,15 @@ type Block struct {
 	Hash	string	`gorm:"type:varchar(70) NOT NULL;" json:"block_hash"`
 	Timestamp	uint64	`gorm:"type:bigint(20) UNSIGNED NOT NULL;" json:"block_time"`
 	ParentHash	string	`gorm:"type:varchar(68) NOT NULL;" json:"parenthash"`
-	Txs	[]*TxInfo	`gorm:"foreignKey:Block;references:Num;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"transactions,omitempty"`
+	Txs	[]*TxInfo	`gorm:"foreignKey:Block;references:Num;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"txs,omitempty"`
+	Txlist	[]string	`gorm:"-" json:"transactions,omitempty"`
+	Stable	bool	`gorm:"type:bool" json:"isstable"`
 }
 
 type BlockSet struct {
 	Blocks	[]Block	`json:"blocks"`
 }
+
 
 const (
 	UserName     string = "root"

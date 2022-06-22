@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"context"
+	"sync"
 	//"time"
 	"math/big"
 	//"reflect"
@@ -11,66 +12,73 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	//"github.com/ethereum/go-ethereum/params"
 	//"gorm.io/driver/mysql"
-	//"gorm.io/gorm"
+	"gorm.io/gorm"
 )
 
-/*const (
-	UserName     string = "root"
-	Password     string = "123qweasd"
-	Addr         string = "127.0.0.1"
-	Port         int    = 3306
-	Database     string = "evm_data"
-	MaxLifetime  int    = 10
-	MaxOpenConns int    = 10
-	MaxIdleConns int    = 10
-)
-
-type TxInfo struct {
-	Txhash	string	`gorm:"type:varchar(70) NOT NULL primary key;"`
-	Block	uint64 `gorm:"type:bigint(20) UNSIGNED NOT NULL;"`
-	Txfrom	string	`gorm:"type:varchar(65) NOT NULL;"`
-	Txto	string	`gorm:"type:varchar(65) NOT NULL;"`
-	Value	string	`gorm:"type:varchar(30) NOT NULL;"`
-	Nonce	uint64	`gorm:"type:bigint(20) UNSIGNED NOT NULL;"`
-	Data	[]byte	`gorm:"type:blob;"`
-}
-
-type Blocks struct {
-	Num	uint64	`gorm:"type:bigint(20) UNSIGNED NOT NULL primary key;"`
-	Hash	string	`gorm:"type:varchar(70) NOT NULL;"`
-	Timestamp	uint64	`gorm:"type:bigint(20) UNSIGNED NOT NULL;"`
-	ParentHash	string	`gorm:"type:varchar(68) NOT NULL;"`
-	Txs	[]*TxInfo	`gorm:"foreignKey:Block;references:Num;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
-}
-
-func connectdb() *gorm.DB {
-	addr := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8&parseTime=True", UserName, Password, Addr, Port, Database)
-
-	//fmt.Println("Connecting to DB")
-	conn, err := gorm.Open(mysql.Open(addr), &gorm.Config{})
-	if err != nil {
-		fmt.Println("connection to mysql failed:", err)
-		return nil
-	}
-
-	db, err1 := conn.DB()
-	if err1 != nil {
-		fmt.Println("gdet db failed:", err)
-		return nil
-	}
-	db.SetConnMaxLifetime(time.Duration(MaxLifetime) * time.Second)
-	db.SetMaxIdleConns(MaxIdleConns)
-	db.SetMaxOpenConns(MaxOpenConns)
-
-	fmt.Println("Connection to DB Succeeded")
-
-	return conn
-}*/
-
+var db *gorm.DB
 var ctx = context.TODO()
 var client *ethclient.Client
+var chainID *big.Int
 var e error
-func getlastblocknum() *big.Int {
+
+var wg *sync.WaitGroup
+var sqllock sync.Mutex
+var numlock sync.Mutex
+
+var latest_block_num *big.Int
+var block_num_stable *big.Int
+var block_num_flag *big.Int
+
+func main() {
+	wg = new(sync.WaitGroup)
+	db = connectdb()
+
+	if db == nil {
+		panic("No DB instance")
+		return
+	}
+
+	//fmt.Println("Create Blocks")
+	db.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(&Block{}, &TxInfo{}, &Log{})
+
+	
+	url := fmt.Sprintf("%s://%s:%d", "https", "data-seed-prebsc-2-s3.binance.org", 8545)
+	client, e = ethclient.Dial(url)
+	if e != nil {
+		panic(e)
+		return
+	}
+	fmt.Println("Connected to RPC")
+
+	chainID, e = client.NetworkID(ctx)
+	if e != nil {
+		panic(e)
+		return
+	}
+
+	block_num_flag = big.NewInt(20427600)
+	stable_range := big.NewInt(-20)
+	gr_count := 3
+
+	for {
+		latest_block_num = GetLatestBlockNum()
+		block_num_stable = new(big.Int).Add(latest_block_num, stable_range)
+
+		//fmt.Println(reflect.TypeOf(client))
+		fmt.Printf("Start from %s... Current latest: %s\n", block_num_flag.String(), latest_block_num.String())
+
+		for i:=0; i<gr_count; i++ {
+			wg.Add(1)
+			go GetBlockInfo(i, wg)
+		}
+		wg.Wait()
+
+		break
+	}
+
+}
+
+func GetLatestBlockNum() *big.Int {
 	bnum, err := client.BlockNumber(ctx)
         if err != nil {
                 panic(err)
@@ -78,86 +86,80 @@ func getlastblocknum() *big.Int {
 	return new(big.Int).SetUint64(bnum)
 }
 
-func main() {
-	db := connectdb()
-	if db == nil {
-		panic("No DB instance")
-		return
+func GetNextParseNum() (*big.Int, bool) {
+	if block_num_flag.Cmp(latest_block_num) > 0 {
+		return nil, false
+	}
+	tmpnum := new(big.Int).Add(block_num_flag, big.NewInt(0))
+	block_num_flag.Add(block_num_flag, big.NewInt(1))
+
+	var isstable bool
+	if block_num_stable.Cmp(block_num_flag) > 0 {
+		isstable = false
+	}else {
+		isstable = true
 	}
 
-	//fmt.Println("Create Blocks")
-	db.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(&Block{}, &TxInfo{})
-
-	
-	url := fmt.Sprintf("%s://%s:%d", "https", "data-seed-prebsc-2-s3.binance.org", 8545)
-	client, e = ethclient.Dial(url)
-	if e != nil {
-		panic(e)
-	}
-	fmt.Println("Connected to RPC")
-
-	chainID, err := client.NetworkID(ctx)
-	if err != nil {
-		panic(err)
-	}
-
-	block_num := big.NewInt(20396000)
-	for {
-		last_block_num := getlastblocknum()
-
-		//fmt.Println(reflect.TypeOf(client))
-		fmt.Printf("Start from %s... Current latest: %s\n", block_num.String(), last_block_num.String());
-
-		for ; block_num.Cmp(last_block_num) <= 0; block_num.Add(block_num, big.NewInt(1)) {
-			fmt.Printf("Parsing No.%s Block  ", block_num.String())
-
-			block, err := client.BlockByNumber(ctx, block_num)
-        		if err != nil {
-                		panic(err)
-	        	}
-			fmt.Printf("%s  tx count:%d\n", block.Hash().Hex(), len(block.Transactions()))
-
-			newblock := Block{Num:block.NumberU64(), Hash:block.Hash().Hex(), Timestamp:block.Time(), ParentHash:block.ParentHash().Hex()}
-			result := db.Create(&newblock)
-        		if result.Error != nil {
-                		panic("Create failt")
-		        }
-        		if result.RowsAffected != 1 {
-                		panic("RowsAffected Number failt")
-		        }
-
-
-			txs := make([]*TxInfo, 0)
-			if len(block.Transactions()) > 0 {
-				for _, tx := range block.Transactions() {
-					//fmt.Println(tx.Hash().Hex())
-
-					msg, err := tx.AsMessage(types.NewEIP155Signer(chainID), big.NewInt(1))
-					if err != nil {
-						panic(err)
-					}
-					//fmt.Println(msg.From().Hex())
-
-					var txto string
-					if tx.To() == nil {
-						txto = "N/A"
-					} else {
-						txto = tx.To().Hex()
-					}
-					//fmt.Println(txto)
-
-					txobj := &TxInfo{Txhash:tx.Hash().Hex(), Txfrom:msg.From().Hex(), Txto:txto, Value:tx.Value().String(), Nonce:tx.Nonce(), Data:"0x"+hex.EncodeToString(tx.Data()), Block:block.NumberU64()}
-
-					txs = append(txs, txobj)
-				}
-
-				//db.Debug().Model(&newblock).Association("Txs").Append(txs)
-				db.Create(&txs)
-			}
-		}
-	}
-
-	var fblock Block
-	db.Debug().First(&fblock)
+	return tmpnum, isstable
 }
 
+func GetBlockInfo(id int, wg *sync.WaitGroup){
+	defer wg.Done()
+
+	for {
+		numlock.Lock()
+		block_num, isstable := GetNextParseNum()
+		numlock.Unlock()
+		if block_num == nil {
+			return
+		}
+		//fmt.Printf("Parsing No.%s Block  ", block_num.String())
+
+		block, err := client.BlockByNumber(ctx, block_num)
+        	if err != nil {
+              		panic(err)
+	      	}
+		fmt.Printf("[%d] Parsing Block %s w/ %d TXs\n", id, block_num.String(), len(block.Transactions()))
+
+		txs := make([]*TxInfo, 0)
+		logs := make([]*Log, 0)
+		for _, tx := range block.Transactions() {
+			//fmt.Println(tx.Hash().Hex())
+
+			msg, err := tx.AsMessage(types.NewEIP155Signer(chainID), big.NewInt(1))
+			if err != nil {
+				panic(err)
+			}
+			//fmt.Println(msg.From().Hex())
+
+			var txto string
+			if tx.To() == nil {
+				txto = "N/A"
+			} else {
+				txto = tx.To().Hex()
+			}
+
+			receipt, _ := client.TransactionReceipt(ctx, tx.Hash())
+			//fmt.Println(receipt.Logs)
+			for _, lg := range receipt.Logs {
+				lgobj := &Log{Idx:lg.Index, Data:hex.EncodeToString(lg.Data), Tx:tx.Hash().Hex()}
+				logs = append(logs, lgobj)
+			}
+
+			txobj := &TxInfo{Txhash:tx.Hash().Hex(), Txfrom:msg.From().Hex(), Txto:txto, Value:tx.Value().String(), Nonce:tx.Nonce(), Data:"0x"+hex.EncodeToString(tx.Data()), Block:block.NumberU64()}
+
+			txs = append(txs, txobj)
+		}
+
+		newblock := Block{Num:block.NumberU64(), Hash:block.Hash().Hex(), Timestamp:block.Time(), ParentHash:block.ParentHash().Hex()}
+		newblock.Stable = isstable
+		sqllock.Lock()
+		db.Delete(&Block{}, block.NumberU64())
+		db.Create(&newblock)
+		if len(block.Transactions()) > 0 {
+			db.Create(&txs)
+			db.Create(&logs)
+		}
+		sqllock.Unlock()
+	}
+}

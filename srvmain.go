@@ -35,6 +35,11 @@ func getblock(c *gin.Context) {
 
 	var fblock Block
 	db.Preload("Txs").Find(&fblock, id)
+	fblock.Txlist = make([]string, 0)
+	for _, tx := range fblock.Txs {
+		fblock.Txlist = append(fblock.Txlist, tx.Txhash)
+	}
+	fblock.Txs = nil
 
 	if fblock.Num == 0 {
 		c.JSON(404, nil)
@@ -47,7 +52,7 @@ func gettx(c *gin.Context) {
 	txhash := c.Param("txHash")
 
 	var ftx TxInfo
-	db.Where(&TxInfo{Txhash:txhash}).Find(&ftx)
+	db.Preload("Logs").Where(&TxInfo{Txhash:txhash}).Find(&ftx)
 
 	if ftx.Txhash == "" {
 		c.JSON(404, nil)
@@ -70,7 +75,7 @@ func main() {
 		panic("No DB instance")
 		return
 	}
-	db.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(&Block{}, &TxInfo{})
+	db.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(&Block{}, &TxInfo{}, &Log{})
 
 
 	server := gin.Default()
