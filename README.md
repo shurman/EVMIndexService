@@ -1,36 +1,78 @@
-# EVM Index Service (Not finished)
+# EVM Index Service
 
 ## Introduction
 Implement EVM-based chain information indexer service for practice.
 
 ### Services
-1. Block Indexer which is to download block & trasaction data to database
-1. API Service to retrieve data from database
+1. **Block Indexer** which is to download block & trasaction data to database
+1. **API Service** to retrieve data from database
 
 ## Installation
-1. Modify `src/config` or keep it default
-1. Build docker image with `docker build -t evmindeximg . --no-cache`
-1. Start container: `docker run -itd --name evmindexer -p 8000:8000 evmindeximg`
-1. Login container: `docker exec -it evmindexer bash`
+* Modify `src/config` or keep it default
+```bash
+NUM_GOROUTINE=20        //Indexer will create 20 goroutines to parse blocks
+BLOCK_STABLE_COUNT=20   //Block is flagged as stable after 20 blocks confirm
+BLOCK_START=20000000    //Download from number 20000000 block
+AVG_BLOCK_TIME=3        //Average block confirmation time(3sec)
+RPC_URL=xxxxxxxxx       //Default URL is BSC Testnet RPC
+```
+* Build docker image with
+```bash
+docker build -t evmindeximg . --no-cache
+```
+
+* Start container
+```bash
+docker run -itd --name evmindexer -p 8000:8000 evmindeximg
+```
+
+* Login container
+```bash
+docker exec -it evmindexer bash
+```
 
 ## Execution
-1. Login created container, `/go/src/run.sh`
+* Login created container, and run
+```bash
+/go/src/run.sh
+```
 
 ## Custom Execution
-1. `cd /go/src`
-1. Start Service
+### Start Service
   * Must run under `/go/src`
-  * Block Indexer: `go run main.go dbstruct.go -g [int] -s [int] -b [int]`
-    * `-g`: Number of Goroutine (Default: 20)
-    * `-s`: Block is defined as stable after s block confirm (Default: 20)
-    * `-b`: Download from number b block (Default: 20000000)
-  * API Service: `go run srvmain.go dbstruct.go`
-    * Listen to `8000` port
-1. Alternative
-  * Build Go code to executables by `go build [go file]`
+  ```bash
+  cd /go/src
+  ```
+  * Block Indexer:
+  ```bash
+    go run main.go dbstruct.go -g [int] -s [int] -b [int] -t [int] -u [int]
+    -g: Number of Goroutine (Default: 20)
+    -s: Block is flagged as stable after s block confirm (Default: 20)
+    -b: Download from number b block (Default: 20000000)
+    -t: Average block confirmation time(Default: 3)(sec)
+    -u: RPC URL (Default: https://data-seed-prebsc-2-s3.binance.org:8545)
+  ```
+  * API Service (Listen to `8000` port)
+  ```bash
+    go run srvmain.go dbstruct.go
+  ```
 
-## Database schema
-* block
+### Alternative
+  * Build Go code to executable
+  ```bash
+  go build [go file]
+  ```
+
+## Stable / Unstable Block
+  Because the Longest Chain principle, the latest block may be replaced. (which implies unstable)
+
+  Block which number is `< latest_block_num - BLOCK_STABLE_COUNT` will be flagged as stable block.
+
+  **Block Indexer**, in each session, starts scanning from the oldest unstable block. When scanning to the latest block, **Block Indexer** sleeps `AVG_BLOCK_TIME * BLOCK_STABLE_COUNT /2` seconds.
+  Then start a new session.
+
+## Database Schema
+### block
 
 | Field | Type | Tag |
 | :----: | :----: | :----: |
@@ -41,7 +83,7 @@ Implement EVM-based chain information indexer service for practice.
 | txs | FK: tx_info.block | -- |
 | stable | bool | NN |
 
-* tx_info
+### tx_info
 
 | Field | Type | Tag |
 | :----: | :----: | :----: |
@@ -54,7 +96,7 @@ Implement EVM-based chain information indexer service for practice.
 | data | mediumtext | NN |
 | logs | FK: log.tx | NN |
 
-* log
+### log
 
 | Field | Type | Tag |
 | :----: | :----: | :----: |
@@ -66,8 +108,8 @@ Implement EVM-based chain information indexer service for practice.
 ## API List
 
 ### Get Recent N Blocks Information
-  * url: (GET) `/blocks?limit=N`
-  * return:
+  * URL: (GET) `/blocks?limit=N`
+  * Return:
 ```
 {
   blocks:[
@@ -82,8 +124,8 @@ Implement EVM-based chain information indexer service for practice.
 }
 ```
 ### Get Specific Block Information
-  * url: (GET) `/block/{num}`
-  * return:
+  * URL: (GET) `/block/{num}`
+  * Return:
 ```
 {
   block_num,
@@ -96,8 +138,8 @@ Implement EVM-based chain information indexer service for practice.
 }
 ```
 ### Get Specific Block Information
-  * url: (GET) `/transaction/{tx_hash}`
-  * return:
+  * URL: (GET) `/transaction/{tx_hash}`
+  * Return:
 ```
 {
   tx_hash,

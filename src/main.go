@@ -5,7 +5,7 @@ import (
 	"context"
 	"sync"
 	"flag"
-	//"time"
+	"time"
 	"math/big"
 	"encoding/hex"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -18,8 +18,8 @@ import (
 var gr_count = flag.Int("g", 20, "Number of Goroutine")
 var i_st_range = flag.Int64("s", 20, "Block is defined as stable after s block confirm")
 var start_block_num = flag.Int64("b", 20443000, "Download from number b block")
-
-var rpc_url = "https://data-seed-prebsc-2-s3.binance.org:8545"
+var avg_block_time = flag.Int64("t", 3, "Average block confirmation time")
+var rpc_url = flag.String("u","https://data-seed-prebsc-2-s3.binance.org:8545", "RPC URL, Default URL is BSC Testnet RPC")
 
 var db *gorm.DB
 var ctx = context.TODO()
@@ -46,12 +46,12 @@ func main() {
 	db.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(&Block{}, &TxInfo{}, &Log{})
 
 	//Connect to RPC
-	client, err := ethclient.Dial(rpc_url)
+	client, err := ethclient.Dial(*rpc_url)
 	if err != nil {
 		panic(err)
 		return
 	}
-	fmt.Println("Connected to RPC")
+	fmt.Printf("Connected to RPC %s\n", *rpc_url)
 
 	//Get Chain ID
 	chainID, e = client.NetworkID(ctx)
@@ -77,7 +77,10 @@ func main() {
 		}
 		wg.Wait()
 
-		break
+		fmt.Println("Waiting for next session...")
+		time.Sleep(time.Duration((*i_st_range) * (*avg_block_time)/2) * time.Second)
+
+		block_num_flag = block_num_stable
 	}
 
 }
@@ -98,7 +101,7 @@ func GetNextParseNum() (*big.Int, bool) {
 	block_num_flag.Add(block_num_flag, big.NewInt(1))
 
 	var isstable bool
-	if block_num_stable.Cmp(block_num_flag) > 0 {
+	if block_num_stable.Cmp(block_num_flag) < 0 {
 		isstable = false
 	}else {
 		isstable = true
@@ -110,7 +113,7 @@ func GetNextParseNum() (*big.Int, bool) {
 func GetBlockInfo(id int, wg *sync.WaitGroup){
 	defer wg.Done()
 
-	client, err := ethclient.Dial(rpc_url)
+	client, err := ethclient.Dial(*rpc_url)
 	if err != nil {
 		panic(err)
 		return
@@ -125,11 +128,34 @@ func GetBlockInfo(id int, wg *sync.WaitGroup){
 			return
 		}
 
+		//Check exist. If exists, check update
+		fblock := new(Block)
+		db.Find(&fblock, block_num.String())
+		if fblock.Num != 0 && fblock.Stable {
+			fmt.Printf("[%2d] Block %s (%t) exists and no need to update. Skip\n", id, block_num.String(), isstable)
+			continue
+		}
+
 		block, err := client.BlockByNumber(ctx, block_num)
         	if err != nil {
               		panic(err)
 	      	}
-		fmt.Printf("[%2d] Parsing Block %s w/ %d TXs\n", id, block_num.String(), len(block.Transactions()))
+
+		if fblock.Hash == block.Hash().Hex() {
+			if isstable {
+				fmt.Printf("[%2d] Block %s (%t) flags to stable\n", id, block_num.String(), isstable)
+				db.Model(&Block{}).Where("num = ?", fblock.Num).Update("stable", true)
+			}else{
+				fmt.Printf("[%2d] Block %s (%t) exists but not stable yet\n", id, block_num.String(), isstable)
+			}
+			continue
+		}else if fblock.Num != 0{
+			fmt.Printf("[%2d] Block %s(%t) need to be updated w/ %d TXs\n", id, block_num.String(), isstable, len(block.Transactions()))
+			db.Delete(&Block{}, block.NumberU64())
+		}else {
+			fmt.Printf("[%2d] Block %s (%t) Parsing w/ %d TXs\n", id, block_num.String(), isstable, len(block.Transactions()))
+		}
+
 
 		txs := make([]*TxInfo, 0)
 		logs := make([]*Log, 0)
@@ -169,7 +195,6 @@ func GetBlockInfo(id int, wg *sync.WaitGroup){
 		newblock := Block{Num:block.NumberU64(), Hash:block.Hash().Hex(), Timestamp:block.Time(), ParentHash:block.ParentHash().Hex()}
 		newblock.Stable = isstable
 		//sqllock.Lock()
-		db.Delete(&Block{}, block.NumberU64())
 		db.Create(&newblock)
 		if len(txs) > 0 {
 			db.Create(&txs)

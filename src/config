@@ -1,3 +1,5 @@
-num_gr=20
-b_stable=20
-b_start=20000000
+NUM_GOROUTINE=20
+BLOCK_STABLE_COUNT=20
+BLOCK_START=20000000
+AVG_BLOCK_TIME=3
+RPC_URL=https://data-seed-prebsc-2-s3.binance.org:8545
