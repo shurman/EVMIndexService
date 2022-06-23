@@ -5,23 +5,29 @@ Implement EVM-based chain information indexer service for practice.
 
 ### Services
 1. Block Indexer which is to download block & trasaction data to database
-2. API Service to retrieve data from database
+1. API Service to retrieve data from database
 
 ## Installation
-1. Build docker image with `docker build -t evmindex . --no-cache`
-1. Start image: `docker run -itd --name evmindex -p 8000:8000`
-1. [To be done]
-1. Config Setup [TBD]
+1. Modify `src/config` or keep it default
+1. Build docker image with `docker build -t evmindeximg . --no-cache`
+1. Start container: `docker run -itd --name evmindexer -p 8000:8000 evmindeximg`
+1. Login container: `docker exec -it evmindexer bash`
 
-## Trial Execution
+## Execution
+1. Login created container, `/go/src/run.sh`
+
+## Custom Execution
 1. `cd /go/src`
-2. Start Service
-  * Block Indexer: `go run /go/src/main.go /go/src/dbstruct.go -g [int] -s [int] -b [int]`
-    * `-g`: Number of Goroutine (Default:3)
-    * `-s`: Block is defined as stable after s block confirm (Default:20)
-    * `-b`: Download from number b block (Default:20000000)
-  * API Service: `go run /go/src/srvmain.go /go/src/dbstruct.go`
-    * Default listen tp 8000 port
+1. Start Service
+  * Must run under `/go/src`
+  * Block Indexer: `go run main.go dbstruct.go -g [int] -s [int] -b [int]`
+    * `-g`: Number of Goroutine (Default: 20)
+    * `-s`: Block is defined as stable after s block confirm (Default: 20)
+    * `-b`: Download from number b block (Default: 20000000)
+  * API Service: `go run srvmain.go dbstruct.go`
+    * Listen to `8000` port
+1. Alternative
+  * Build Go code to executables by `go build [go file]`
 
 ## Database schema
 * block
@@ -58,9 +64,8 @@ Implement EVM-based chain information indexer service for practice.
 | data | mediumtext | NN |
 
 ## API List
-* Authentication with access token in header
 
-1. Get Recent N Blocks Information
+### Get Recent N Blocks Information
   * url: (GET) `/blocks?limit=N`
   * return:
 ```
@@ -76,7 +81,7 @@ Implement EVM-based chain information indexer service for practice.
   ]
 }
 ```
-1. Get Specific Block Information
+### Get Specific Block Information
   * url: (GET) `/block/{num}`
   * return:
 ```
@@ -90,7 +95,7 @@ Implement EVM-based chain information indexer service for practice.
   ]
 }
 ```
-1. Get Specific Block Information
+### Get Specific Block Information
   * url: (GET) `/transaction/{tx_hash}`
   * return:
 ```
@@ -111,6 +116,5 @@ Implement EVM-based chain information indexer service for practice.
 ```
 
 ## Need to be optimized
-1. Initialize DB instance for each goroutine
-2. API service loaded to much not needed data
-3. Run services as daemon
+1. API service loaded to much not needed data
+1. Run services as daemon

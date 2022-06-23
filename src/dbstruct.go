@@ -47,8 +47,8 @@ const (
 	Port         int    = 3306
 	Database     string = "evm_data"
 	MaxLifetime  int    = 10
-	MaxOpenConns int    = 10
-	MaxIdleConns int    = 10
+	MaxOpenConns int    = 100
+	MaxIdleConns int    = 40
 )
 
 func connectdb() *gorm.DB {

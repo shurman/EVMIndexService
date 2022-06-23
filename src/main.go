@@ -5,6 +5,7 @@ import (
 	"context"
 	"sync"
 	"flag"
+	//"time"
 	"math/big"
 	"encoding/hex"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -14,18 +15,19 @@ import (
 	"gorm.io/gorm"
 )
 
-var gr_count = flag.Int("g", 3, "Number of Goroutine")
+var gr_count = flag.Int("g", 20, "Number of Goroutine")
 var i_st_range = flag.Int64("s", 20, "Block is defined as stable after s block confirm")
 var start_block_num = flag.Int64("b", 20443000, "Download from number b block")
 
+var rpc_url = "https://data-seed-prebsc-2-s3.binance.org:8545"
+
 var db *gorm.DB
 var ctx = context.TODO()
-var client *ethclient.Client
 var chainID *big.Int
 var e error
 
 var wg *sync.WaitGroup
-var sqllock sync.Mutex
+//var sqllock sync.Mutex
 var numlock sync.Mutex
 
 var latest_block_num *big.Int
@@ -44,10 +46,9 @@ func main() {
 	db.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(&Block{}, &TxInfo{}, &Log{})
 
 	//Connect to RPC
-	url := fmt.Sprintf("%s://%s:%d", "https", "data-seed-prebsc-2-s3.binance.org", 8545)
-	client, e = ethclient.Dial(url)
-	if e != nil {
-		panic(e)
+	client, err := ethclient.Dial(rpc_url)
+	if err != nil {
+		panic(err)
 		return
 	}
 	fmt.Println("Connected to RPC")
@@ -61,14 +62,13 @@ func main() {
 
 	block_num_flag = big.NewInt(*start_block_num)
 	stable_range := big.NewInt(-*i_st_range)
-	//gr_count := 3
 
 	wg = new(sync.WaitGroup)
 	for {
-		latest_block_num = GetLatestBlockNum()
+		latest_block_num = GetLatestBlockNum(client)
 		block_num_stable = new(big.Int).Add(latest_block_num, stable_range)
 
-		fmt.Printf("Start from %s to %s with %d gr. (stable after %d blocks)\n", block_num_flag.String(), latest_block_num.String(), *gr_count, *i_st_range)
+		fmt.Printf("Start from %s to %s with %d goroutine(s). (stable after %d blocks)\n", block_num_flag.String(), latest_block_num.String(), *gr_count, *i_st_range)
 
 		//Use GoRoutine to download block data
 		for i:=0; i < *gr_count; i++ {
@@ -82,7 +82,7 @@ func main() {
 
 }
 
-func GetLatestBlockNum() *big.Int {
+func GetLatestBlockNum(client *ethclient.Client) *big.Int {
 	bnum, err := client.BlockNumber(ctx)
         if err != nil {
                 panic(err)
@@ -110,6 +110,12 @@ func GetNextParseNum() (*big.Int, bool) {
 func GetBlockInfo(id int, wg *sync.WaitGroup){
 	defer wg.Done()
 
+	client, err := ethclient.Dial(rpc_url)
+	if err != nil {
+		panic(err)
+		return
+	}
+
 	for {
 		//Get next block number to download
 		numlock.Lock()
@@ -123,10 +129,12 @@ func GetBlockInfo(id int, wg *sync.WaitGroup){
         	if err != nil {
               		panic(err)
 	      	}
-		fmt.Printf("[%d] Parsing Block %s w/ %d TXs\n", id, block_num.String(), len(block.Transactions()))
+		fmt.Printf("[%2d] Parsing Block %s w/ %d TXs\n", id, block_num.String(), len(block.Transactions()))
 
 		txs := make([]*TxInfo, 0)
 		logs := make([]*Log, 0)
+		var logslock sync.Mutex
+		c_wg := new(sync.WaitGroup)
 		for _, tx := range block.Transactions() {
 			msg, err := tx.AsMessage(types.NewEIP155Signer(chainID), big.NewInt(1))
 			if err != nil {
@@ -140,26 +148,35 @@ func GetBlockInfo(id int, wg *sync.WaitGroup){
 				txto = tx.To().Hex()
 			}
 
-			receipt, _ := client.TransactionReceipt(ctx, tx.Hash())
-			for _, lg := range receipt.Logs {
-				lgobj := &Log{Idx:lg.Index, Data:hex.EncodeToString(lg.Data), Tx:tx.Hash().Hex()}
-				logs = append(logs, lgobj)
-			}
+			c_wg.Add(1)
+			go func(){
+				defer c_wg.Done()
+				receipt, _ := client.TransactionReceipt(ctx, tx.Hash())
+				for _, lg := range receipt.Logs {
+					lgobj := &Log{Idx:lg.Index, Data:hex.EncodeToString(lg.Data), Tx:tx.Hash().Hex()}
+					logslock.Lock()
+					logs = append(logs, lgobj)
+					logslock.Unlock()
+				}
+			}()
 
 			txobj := &TxInfo{Txhash:tx.Hash().Hex(), Txfrom:msg.From().Hex(), Txto:txto, Value:tx.Value().String(), Nonce:tx.Nonce(), Data:"0x"+hex.EncodeToString(tx.Data()), Block:block.NumberU64()}
 
 			txs = append(txs, txobj)
 		}
+		c_wg.Wait()
 
 		newblock := Block{Num:block.NumberU64(), Hash:block.Hash().Hex(), Timestamp:block.Time(), ParentHash:block.ParentHash().Hex()}
 		newblock.Stable = isstable
-		sqllock.Lock()
+		//sqllock.Lock()
 		db.Delete(&Block{}, block.NumberU64())
 		db.Create(&newblock)
-		if len(block.Transactions()) > 0 {
+		if len(txs) > 0 {
 			db.Create(&txs)
+		}
+		if len(logs) > 0 {
 			db.Create(&logs)
 		}
-		sqllock.Unlock()
+		//sqllock.Unlock()
 	}
 }

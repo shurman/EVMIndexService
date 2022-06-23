@@ -8,11 +8,6 @@ import (
 	"gorm.io/gorm"
 )
 
-type IndexData struct {
-	Title   string
-	Content string
-}
-
 var db *gorm.DB
 
 func lastblock(c *gin.Context) {
@@ -20,7 +15,7 @@ func lastblock(c *gin.Context) {
 
 	limit, err := strconv.Atoi(nlimit)
 	if err != nil {
-		c.JSON(400, nil)
+		c.JSON(400, gin.H{"message":"invalid input"})
 		return
 	}
 
@@ -42,7 +37,7 @@ func getblock(c *gin.Context) {
 	fblock.Txs = nil
 
 	if fblock.Num == 0 {
-		c.JSON(404, nil)
+		c.JSON(404, gin.H{"message":"Block not found or not indexed. Please wait for a while"})
 		return
 	}else {
 		c.JSON(200, fblock)
@@ -55,18 +50,15 @@ func gettx(c *gin.Context) {
 	db.Preload("Logs").Where(&TxInfo{Txhash:txhash}).Find(&ftx)
 
 	if ftx.Txhash == "" {
-		c.JSON(404, nil)
+		c.JSON(404, gin.H{"message":"Transaction not found or not indexed. Please wait for a while"})
 		return
 	}else {
 		c.JSON(200, ftx)
 	}
 }
 
-func test(c *gin.Context) {
-	data := new(IndexData)
-	data.Title = "Homepage"
-	data.Content = "test"
-	c.HTML(http.StatusOK, "index.html", data)
+func homepage(c *gin.Context) {
+	c.HTML(http.StatusOK, "index.html", nil)
 }
 
 func main() {
@@ -81,7 +73,7 @@ func main() {
 	server := gin.Default()
 	server.LoadHTMLGlob("template/*")
 	
-	server.GET("/", test)
+	server.GET("/", homepage)
 	server.GET("/blocks", lastblock)
 	server.GET("/block/:id", getblock)
 	server.GET("/transaction/:txHash", gettx)
