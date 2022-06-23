@@ -88,5 +88,5 @@ func main() {
 	server.RedirectFixedPath = true
 
 
-	server.Run(":8888")
+	server.Run(":8000")
 }

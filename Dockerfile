@@ -10,6 +10,7 @@ RUN mkdir -p "$GOPATH/src" "$GOPATH/bin" && chmod -R 777 "$GOPATH"
 RUN cd $GOPATH/src && go mod init ethmod && go get -u github.com/ethereum/go-ethereum gorm.io/gorm gorm.io/driver/mysql github.com/gin-gonic/gin
 
 COPY mysqlsetup.sh /tmp
+COPY *.go $GOPATH/src
 RUN sh /tmp/mysqlsetup.sh
 
 WORKDIR $GOPATH

@@ -4,9 +4,8 @@ import (
 	"fmt"
 	"context"
 	"sync"
-	//"time"
+	"flag"
 	"math/big"
-	//"reflect"
 	"encoding/hex"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -14,6 +13,10 @@ import (
 	//"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
+
+var gr_count = flag.Int("g", 3, "Number of Goroutine")
+var i_st_range = flag.Int64("s", 20, "Block is defined as stable after s block confirm")
+var start_block_num = flag.Int64("b", 20443000, "Download from number b block")
 
 var db *gorm.DB
 var ctx = context.TODO()
@@ -30,18 +33,17 @@ var block_num_stable *big.Int
 var block_num_flag *big.Int
 
 func main() {
-	wg = new(sync.WaitGroup)
-	db = connectdb()
+	flag.Parse()
 
+	//Connect to DB and tables
+	db = connectdb()
 	if db == nil {
 		panic("No DB instance")
 		return
 	}
-
-	//fmt.Println("Create Blocks")
 	db.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(&Block{}, &TxInfo{}, &Log{})
 
-	
+	//Connect to RPC
 	url := fmt.Sprintf("%s://%s:%d", "https", "data-seed-prebsc-2-s3.binance.org", 8545)
 	client, e = ethclient.Dial(url)
 	if e != nil {
@@ -50,24 +52,26 @@ func main() {
 	}
 	fmt.Println("Connected to RPC")
 
+	//Get Chain ID
 	chainID, e = client.NetworkID(ctx)
 	if e != nil {
 		panic(e)
 		return
 	}
 
-	block_num_flag = big.NewInt(20427600)
-	stable_range := big.NewInt(-20)
-	gr_count := 3
+	block_num_flag = big.NewInt(*start_block_num)
+	stable_range := big.NewInt(-*i_st_range)
+	//gr_count := 3
 
+	wg = new(sync.WaitGroup)
 	for {
 		latest_block_num = GetLatestBlockNum()
 		block_num_stable = new(big.Int).Add(latest_block_num, stable_range)
 
-		//fmt.Println(reflect.TypeOf(client))
-		fmt.Printf("Start from %s... Current latest: %s\n", block_num_flag.String(), latest_block_num.String())
+		fmt.Printf("Start from %s to %s with %d gr. (stable after %d blocks)\n", block_num_flag.String(), latest_block_num.String(), *gr_count, *i_st_range)
 
-		for i:=0; i<gr_count; i++ {
+		//Use GoRoutine to download block data
+		for i:=0; i < *gr_count; i++ {
 			wg.Add(1)
 			go GetBlockInfo(i, wg)
 		}
@@ -107,13 +111,13 @@ func GetBlockInfo(id int, wg *sync.WaitGroup){
 	defer wg.Done()
 
 	for {
+		//Get next block number to download
 		numlock.Lock()
 		block_num, isstable := GetNextParseNum()
 		numlock.Unlock()
 		if block_num == nil {
 			return
 		}
-		//fmt.Printf("Parsing No.%s Block  ", block_num.String())
 
 		block, err := client.BlockByNumber(ctx, block_num)
         	if err != nil {
@@ -124,13 +128,10 @@ func GetBlockInfo(id int, wg *sync.WaitGroup){
 		txs := make([]*TxInfo, 0)
 		logs := make([]*Log, 0)
 		for _, tx := range block.Transactions() {
-			//fmt.Println(tx.Hash().Hex())
-
 			msg, err := tx.AsMessage(types.NewEIP155Signer(chainID), big.NewInt(1))
 			if err != nil {
 				panic(err)
 			}
-			//fmt.Println(msg.From().Hex())
 
 			var txto string
 			if tx.To() == nil {
@@ -140,7 +141,6 @@ func GetBlockInfo(id int, wg *sync.WaitGroup){
 			}
 
 			receipt, _ := client.TransactionReceipt(ctx, tx.Hash())
-			//fmt.Println(receipt.Logs)
 			for _, lg := range receipt.Logs {
 				lgobj := &Log{Idx:lg.Index, Data:hex.EncodeToString(lg.Data), Tx:tx.Hash().Hex()}
 				logs = append(logs, lgobj)

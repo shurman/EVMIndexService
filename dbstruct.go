@@ -29,10 +29,10 @@ type Block struct {
 	Num	uint64	`gorm:"type:bigint(20) UNSIGNED NOT NULL primary key;" json:"block_num"`
 	Hash	string	`gorm:"type:varchar(70) NOT NULL;" json:"block_hash"`
 	Timestamp	uint64	`gorm:"type:bigint(20) UNSIGNED NOT NULL;" json:"block_time"`
-	ParentHash	string	`gorm:"type:varchar(68) NOT NULL;" json:"parenthash"`
+	ParentHash	string	`gorm:"type:varchar(70) NOT NULL;" json:"parenthash"`
 	Txs	[]*TxInfo	`gorm:"foreignKey:Block;references:Num;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"txs,omitempty"`
 	Txlist	[]string	`gorm:"-" json:"transactions,omitempty"`
-	Stable	bool	`gorm:"type:bool" json:"isstable"`
+	Stable	bool	`gorm:"type:bool NOT NULL" json:"isstable"`
 }
 
 type BlockSet struct {
