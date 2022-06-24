@@ -26,17 +26,15 @@ $ docker build -t evmindeximg . --no-cache
 $ docker run -itd --name evmindexer -p 8000:8000 evmindeximg
 ```
 
-* Login container
+## Execution
+* Login created container
 ```bash
 $ docker exec -it evmindexer bash
 ```
 
-## Execution
-* Login created container, and run
-
 ### Before Runnning
 * **Warning:** Any security protection is not invovled, including DB password (default empty), firewall rule (default open), DDOS, and so on. Security should be concerned before using in production environment.
-* Services use local mysql to store data. You may change to other database by configuring in `src/dbstruct.go`
+* Services use local mysql to store data. You may change to other database by configuring in `/go/src/dbstruct.go`
 ```bash
 UserName     string = "root"
 Password     string = ""
@@ -52,7 +50,7 @@ MaxIdleConns int    = 40
 ```bash
 $ /go/src/run.sh
 ```
-* Check servce running
+* Check service running
 ```bash
 curl localhost:8000
 ```
@@ -84,12 +82,12 @@ curl localhost:8000
   ```
 
 ## Stable / Unstable Block
-  Because the Longest Chain principle, the latest block may be replaced. (which implies unstable)
+  Because `Longest Chain` principle for blockchain, the latest blocks may be replaced by other longer forked chain. (which implies `unstable`)
 
-  Block which number is `< latest_block_num - BLOCK_STABLE_COUNT` will be flagged as stable block.
+  Block which number is `< latest_block_num - BLOCK_STABLE_COUNT` will be flagged as `stable` block.
 
-  **Block Indexer**, in each session, starts scanning from the oldest unstable block. When scanning to the latest block, **Block Indexer** sleeps `AVG_BLOCK_TIME * BLOCK_STABLE_COUNT / 3` seconds.
-  Then start a new session.
+  **Block Indexer**, in each session, starts scanning from the earliest unstable block. When scanning to the latest block, **Block Indexer** waits `AVG_BLOCK_TIME * BLOCK_STABLE_COUNT / 3` seconds.
+  Then start a new session, and updates any replaced block (or flags as `stable`)
 
 ## Database Schema
 ### block
