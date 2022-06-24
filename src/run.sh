@@ -7,5 +7,5 @@ AVGBTIME=`cat config | grep "AVG_BLOCK_TIME" | awk -F '=' '{print $2}'`
 RPCURL=`cat config | grep "RPC_URL" | awk -F '=' '{print $2}'`
 
 cd /go/src
-go run main.go dbstruct.go -g $NUMGR -s $BLKSTABLE -b $BLKSTART -t $AVGBTIME -u $RPCURL &> /dev/null &
-go run srvmain.go dbstruct.go &> /dev/null &
+nohup go run main.go dbstruct.go -g $NUMGR -s $BLKSTABLE -b $BLKSTART -t $AVGBTIME -u $RPCURL > /dev/null &
+nohup go run srvmain.go dbstruct.go > srvmain.log 2>&1 & 

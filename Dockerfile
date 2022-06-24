@@ -8,4 +8,5 @@ RUN apt-get update && apt-get install -y wget git gcc vim software-properties-co
 
 COPY src/* $GOPATH/src/
 
+CMD mysql start
 WORKDIR $GOPATH

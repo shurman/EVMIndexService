@@ -12,7 +12,7 @@ Implement EVM-based chain information indexer service for practice.
 ```bash
 NUM_GOROUTINE=20        //Indexer will create 20 goroutines to parse blocks
 BLOCK_STABLE_COUNT=20   //Block is flagged as stable after 20 blocks confirm
-BLOCK_START=20000000    //Download from number 20000000 block
+BLOCK_START=20400000    //Download from number 20400000 block
 AVG_BLOCK_TIME=3        //Average block confirmation time(3sec)
 RPC_URL=xxxxxxxxx       //Default URL is BSC Testnet RPC
 ```
@@ -35,6 +35,7 @@ $ docker exec -it evmindexer bash
 * Login created container, and run
 
 ### Before Runnning
+* **Warning:** Any security protection is not invovled, including DB password (default empty), firewall rule (default open), DDOS, and so on. Security should be concerned before using in production environment.
 * Services use local mysql to store data. You may change to other database by configuring in `src/dbstruct.go`
 ```bash
 UserName     string = "root"
@@ -50,6 +51,10 @@ MaxIdleConns int    = 40
 ### Auto Execution
 ```bash
 $ /go/src/run.sh
+```
+* Check servce running
+```bash
+curl localhost:8000
 ```
 
 ### Custom Execution
@@ -176,3 +181,4 @@ $ /go/src/run.sh
 1. API service loaded to much not needed data
 1. Run services as daemon
 1. Dynamically control number of goroutines
+* A `g1-small` machine (1 Skylake vCPU, 1.7GB RAM) on GCP, with 20 goroutines running, costs 20%~30% CPU usage in average (peak 34%) and 1.1% memory. But the machine slows down due to Database I/O performance after increasing goroutines. As the result, with using an individual mysql server, 40 goroutines running is reasonable to run service at around 50% CPU usage.

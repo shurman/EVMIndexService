@@ -17,7 +17,7 @@ import (
 
 var gr_count = flag.Int("g", 20, "Number of Goroutine")
 var i_st_range = flag.Int64("s", 20, "Block is defined as stable after s block confirm")
-var start_block_num = flag.Int64("b", 20443000, "Download from number b block")
+var start_block_num = flag.Int64("b", 20400000, "Download from number b block")
 var avg_block_time = flag.Int64("t", 3, "Average block confirmation time")
 var rpc_url = flag.String("u","https://data-seed-prebsc-2-s3.binance.org:8545", "RPC URL, Default URL is BSC Testnet RPC")
 
