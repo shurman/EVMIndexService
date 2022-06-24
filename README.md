@@ -18,34 +18,49 @@ RPC_URL=xxxxxxxxx       //Default URL is BSC Testnet RPC
 ```
 * Build docker image with
 ```bash
-docker build -t evmindeximg . --no-cache
+$ docker build -t evmindeximg . --no-cache
 ```
 
 * Start container
 ```bash
-docker run -itd --name evmindexer -p 8000:8000 evmindeximg
+$ docker run -itd --name evmindexer -p 8000:8000 evmindeximg
 ```
 
 * Login container
 ```bash
-docker exec -it evmindexer bash
+$ docker exec -it evmindexer bash
 ```
 
 ## Execution
 * Login created container, and run
+
+### Before Runnning
+* Services use local mysql to store data. You may change to other database by configuring in `src/dbstruct.go`
 ```bash
-/go/src/run.sh
+UserName     string = "root"
+Password     string = ""
+Addr         string = "127.0.0.1"
+Port         int    = 3306
+Database     string = "evm_data"
+MaxLifetime  int    = 10
+MaxOpenConns int    = 100
+MaxIdleConns int    = 40
 ```
 
-## Custom Execution
-### Start Service
+### Auto Execution
+```bash
+$ /go/src/run.sh
+```
+
+### Custom Execution
+#### Start Service
   * Must run under `/go/src`
   ```bash
-  cd /go/src
+  $ cd /go/src
   ```
   * Block Indexer:
   ```bash
-    go run main.go dbstruct.go -g [int] -s [int] -b [int] -t [int] -u [int]
+  $ go run main.go dbstruct.go -g [int] -s [int] -b [int] -t [int] -u [int]
     -g: Number of Goroutine (Default: 20)
     -s: Block is flagged as stable after s block confirm (Default: 20)
     -b: Download from number b block (Default: 20000000)
@@ -54,13 +69,13 @@ docker exec -it evmindexer bash
   ```
   * API Service (Listen to `8000` port)
   ```bash
-    go run srvmain.go dbstruct.go
+  $ go run srvmain.go dbstruct.go
   ```
 
-### Alternative
+#### Alternative
   * Build Go code to executable
   ```bash
-  go build [go file]
+  $ go build [go file]
   ```
 
 ## Stable / Unstable Block
@@ -68,7 +83,7 @@ docker exec -it evmindexer bash
 
   Block which number is `< latest_block_num - BLOCK_STABLE_COUNT` will be flagged as stable block.
 
-  **Block Indexer**, in each session, starts scanning from the oldest unstable block. When scanning to the latest block, **Block Indexer** sleeps `AVG_BLOCK_TIME * BLOCK_STABLE_COUNT /2` seconds.
+  **Block Indexer**, in each session, starts scanning from the oldest unstable block. When scanning to the latest block, **Block Indexer** sleeps `AVG_BLOCK_TIME * BLOCK_STABLE_COUNT / 3` seconds.
   Then start a new session.
 
 ## Database Schema
@@ -160,3 +175,4 @@ docker exec -it evmindexer bash
 ## Need to be optimized
 1. API service loaded to much not needed data
 1. Run services as daemon
+1. Dynamically control number of goroutines

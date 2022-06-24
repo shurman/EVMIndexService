@@ -42,7 +42,7 @@ type BlockSet struct {
 
 const (
 	UserName     string = "root"
-	Password     string = "123qweasd"
+	Password     string = ""
 	Addr         string = "127.0.0.1"
 	Port         int    = 3306
 	Database     string = "evm_data"
@@ -57,7 +57,7 @@ func connectdb() *gorm.DB {
 	//fmt.Println("Connecting to DB")
 	conn, err := gorm.Open(mysql.Open(addr), &gorm.Config{})
 	if err != nil {
-	fmt.Println("connection to mysql failed:", err)
+		fmt.Println("connection to mysql failed:", err)
 		return nil
 	}
 
