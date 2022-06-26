@@ -27,7 +27,6 @@ var chainID *big.Int
 var e error
 
 var wg *sync.WaitGroup
-//var sqllock sync.Mutex
 var numlock sync.Mutex
 
 var latest_block_num *big.Int
@@ -68,7 +67,7 @@ func main() {
 		latest_block_num = GetLatestBlockNum(client)
 		block_num_stable = new(big.Int).Add(latest_block_num, stable_range)
 
-		fmt.Printf("Start from %s to %s with %d goroutine(s). (stable after %d blocks)\n", block_num_flag.String(), latest_block_num.String(), *gr_count, *i_st_range)
+		fmt.Printf("Indexer starts from %s to %s with %d goroutine(s). (stable after %d blocks)\n", block_num_flag.String(), latest_block_num.String(), *gr_count, *i_st_range)
 
 		//Use GoRoutine to download block data
 		for i:=0; i < *gr_count; i++ {
@@ -77,8 +76,8 @@ func main() {
 		}
 		wg.Wait()
 
-		fmt.Println("Waiting for next session...")
-		time.Sleep(time.Duration((*i_st_range) * (*avg_block_time)/2) * time.Second)
+		//fmt.Println("Waiting for next session...")
+		time.Sleep(time.Duration((*i_st_range) * (*avg_block_time)) * time.Second)
 
 		block_num_flag = block_num_stable
 	}
@@ -137,9 +136,10 @@ func GetBlockInfo(id int, wg *sync.WaitGroup){
 		}
 
 		block, err := client.BlockByNumber(ctx, block_num)
-        	if err != nil {
-              		panic(err)
-	      	}
+		if err != nil {
+			panic(err)
+			return
+		}
 
 		if fblock.Hash == block.Hash().Hex() {
 			if isstable {
@@ -165,6 +165,7 @@ func GetBlockInfo(id int, wg *sync.WaitGroup){
 			msg, err := tx.AsMessage(types.NewEIP155Signer(chainID), big.NewInt(1))
 			if err != nil {
 				panic(err)
+				return
 			}
 
 			var txto string
@@ -177,7 +178,11 @@ func GetBlockInfo(id int, wg *sync.WaitGroup){
 			c_wg.Add(1)
 			go func(){
 				defer c_wg.Done()
-				receipt, _ := client.TransactionReceipt(ctx, tx.Hash())
+				receipt, err := client.TransactionReceipt(ctx, tx.Hash())
+				if err != nil {
+					panic(err)
+					return
+				}
 				for _, lg := range receipt.Logs {
 					lgobj := &Log{Idx:lg.Index, Data:hex.EncodeToString(lg.Data), Tx:tx.Hash().Hex()}
 					logslock.Lock()
@@ -194,7 +199,7 @@ func GetBlockInfo(id int, wg *sync.WaitGroup){
 
 		newblock := Block{Num:block.NumberU64(), Hash:block.Hash().Hex(), Timestamp:block.Time(), ParentHash:block.ParentHash().Hex()}
 		newblock.Stable = isstable
-		//sqllock.Lock()
+
 		db.Create(&newblock)
 		if len(txs) > 0 {
 			db.Create(&txs)
@@ -202,6 +207,5 @@ func GetBlockInfo(id int, wg *sync.WaitGroup){
 		if len(logs) > 0 {
 			db.Create(&logs)
 		}
-		//sqllock.Unlock()
 	}
 }

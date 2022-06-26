@@ -5,6 +5,7 @@ import (
 	"time"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 type Log struct {
@@ -55,7 +56,9 @@ func connectdb() *gorm.DB {
 	addr := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8&parseTime=True", UserName, Password, Addr, Port, Database)
 
 	//fmt.Println("Connecting to DB")
-	conn, err := gorm.Open(mysql.Open(addr), &gorm.Config{})
+	conn, err := gorm.Open(mysql.Open(addr), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Error),
+	})
 	if err != nil {
 		fmt.Println("connection to mysql failed:", err)
 		return nil

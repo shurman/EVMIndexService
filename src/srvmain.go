@@ -30,18 +30,19 @@ func getblock(c *gin.Context) {
 
 	var fblock Block
 	db.Preload("Txs").Find(&fblock, id)
+
+	if fblock.Num == 0 {
+		c.JSON(404, gin.H{"message":"Block not found or not indexed. Please wait for a while"})
+		return
+	}
+
 	fblock.Txlist = make([]string, 0)
 	for _, tx := range fblock.Txs {
 		fblock.Txlist = append(fblock.Txlist, tx.Txhash)
 	}
 	fblock.Txs = nil
 
-	if fblock.Num == 0 {
-		c.JSON(404, gin.H{"message":"Block not found or not indexed. Please wait for a while"})
-		return
-	}else {
-		c.JSON(200, fblock)
-	}
+	c.JSON(200, fblock)
 }
 func gettx(c *gin.Context) {
 	txhash := c.Param("txHash")

@@ -46,6 +46,11 @@ MaxOpenConns int    = 100
 MaxIdleConns int    = 40
 ```
 
+* Check MySQL service running if using local mysql service
+```bash
+$ service mysql status
+```
+
 ### Auto Execution
 ```bash
 $ /go/src/run.sh
@@ -53,6 +58,11 @@ $ /go/src/run.sh
 * Check service running
 ```bash
 curl localhost:8000
+```
+
+* API Service Log
+```bash
+/go/src/srvmain.log
 ```
 
 ### Custom Execution
@@ -66,7 +76,7 @@ curl localhost:8000
   $ go run main.go dbstruct.go -g [int] -s [int] -b [int] -t [int] -u [int]
     -g: Number of Goroutine (Default: 20)
     -s: Block is flagged as stable after s block confirm (Default: 20)
-    -b: Download from number b block (Default: 20000000)
+    -b: Download from number b block (Default: 20400000)
     -t: Average block confirmation time(Default: 3)(sec)
     -u: RPC URL (Default: https://data-seed-prebsc-2-s3.binance.org:8545)
   ```
@@ -86,7 +96,7 @@ curl localhost:8000
 
   Block which number is `< latest_block_num - BLOCK_STABLE_COUNT` will be flagged as `stable` block.
 
-  **Block Indexer**, in each session, starts scanning from the earliest unstable block. When scanning to the latest block, **Block Indexer** waits `AVG_BLOCK_TIME * BLOCK_STABLE_COUNT / 3` seconds.
+  **Block Indexer**, in each session, starts scanning from the earliest unstable block. When scanning to the latest block, **Block Indexer** waits `AVG_BLOCK_TIME * BLOCK_STABLE_COUNT` seconds.
   Then start a new session, and updates any replaced block (or flags as `stable`)
 
 ## Database Schema
